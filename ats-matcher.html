@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ATS Matcher — Fix your resume for any JD</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=Instrument+Sans:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0e0e;
+    --surface: #161616;
+    --surface2: #1e1e1e;
+    --border: #2a2a2a;
+    --border2: #333;
+    --text: #f0ede8;
+    --muted: #888;
+    --accent: #c8f04a;
+    --accent-dim: rgba(200, 240, 74, 0.12);
+    --red: #ff6b6b;
+    --red-dim: rgba(255, 107, 107, 0.1);
+    --amber: #ffb347;
+    --amber-dim: rgba(255, 179, 71, 0.1);
+    --green: #5dde8a;
+    --green-dim: rgba(93, 222, 138, 0.1);
+    --blue: #60a5fa;
+    --blue-dim: rgba(96, 165, 250, 0.1);
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  body {
+    font-family: 'Instrument Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 48px 24px 80px;
+  }
+
+  .container { max-width: 900px; margin: 0 auto; }
+
+  header { margin-bottom: 40px; }
+  .tag {
+    display: inline-block;
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+  header h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.8px;
+    line-height: 1.15;
+    margin-bottom: 10px;
+  }
+  header p { font-size: 15px; color: var(--muted); line-height: 1.6; max-width: 560px; }
+
+  .api-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 28px;
+  }
+  .api-bar label { font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .api-bar input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 14px;
+    color: var(--text);
+  }
+  .api-bar input::placeholder { color: #444; }
+  .api-bar a { font-size: 12px; color: var(--accent); text-decoration: none; white-space: nowrap; }
+
+  .inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  @media (max-width: 640px) { .inputs { grid-template-columns: 1fr; } }
+
+  .input-block label {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 8px;
+  }
+  textarea {
+    width: 100%;
+    height: 240px;
+    padding: 14px 16px;
+    font-size: 14px;
+    font-family: 'Instrument Sans', sans-serif;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    resize: none;
+    line-height: 1.6;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  textarea:focus { border-color: var(--border2); }
+  textarea::placeholder { color: #3a3a3a; }
+
+  .analyze-btn {
+    width: 100%;
+    padding: 14px;
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    background: var(--accent);
+    color: #0e0e0e;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .analyze-btn:hover { opacity: 0.88; }
+  .analyze-btn:active { transform: scale(0.99); }
+  .analyze-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .error {
+    display: none;
+    margin-top: 14px;
+    padding: 12px 16px;
+    background: var(--red-dim);
+    border: 1px solid rgba(255,107,107,0.25);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    color: var(--red);
+  }
+
+  .loading {
+    display: none;
+    text-align: center;
+    padding: 48px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .spinner {
+    width: 28px; height: 28px;
+    border: 2px solid var(--border2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin: 0 auto 14px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* RESULTS */
+  .results { display: none; margin-top: 36px; }
+
+  .score-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  @media (max-width: 640px) { .score-row { grid-template-columns: repeat(2, 1fr); } }
+
+  .score-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+  }
+  .score-card .s-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .score-card .s-val {
+    font-family: 'Syne', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -1px;
+  }
+  .s-val.accent { color: var(--accent); }
+  .s-val.green { color: var(--green); }
+  .s-val.red { color: var(--red); }
+  .s-val.amber { color: var(--amber); }
+
+  .section { margin-bottom: 28px; }
+  .section-hd {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* keyword pills */
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill {
+    font-size: 13px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+  .pill.match { background: var(--green-dim); color: var(--green); border: 1px solid rgba(93,222,138,0.2); }
+  .pill.miss { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,107,107,0.2); }
+  .pill.partial { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(255,179,71,0.2); }
+
+  /* bullet fixes */
+  .bullet-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .bullet-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .bullet-card-head:hover { background: var(--surface2); }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot-red { background: var(--red); }
+  .dot-amber { background: var(--amber); }
+  .dot-green { background: var(--green); }
+
+  .bullet-original {
+    font-size: 13px;
+    color: var(--muted);
+    flex: 1;
+    line-height: 1.5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .chevron { font-size: 11px; color: var(--muted); transition: transform 0.2s; }
+  .chevron.open { transform: rotate(180deg); }
+
+  .bullet-card-body { display: none; padding: 0 14px 14px; }
+  .bullet-card-body.open { display: block; }
+
+  .issue-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .issue-tag.weak { background: var(--red-dim); color: var(--red); }
+  .issue-tag.partial { background: var(--amber-dim); color: var(--amber); }
+  .issue-tag.strong { background: var(--green-dim); color: var(--green); }
+
+  .old-bullet {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    border-left: 2px solid var(--border2);
+  }
+  .why { font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 10px; }
+
+  .new-bullet {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.6;
+    padding: 10px 12px;
+    background: var(--green-dim);
+    border-radius: var(--radius-sm);
+    border-left: 2px solid var(--green);
+  }
+  .new-bullet-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--green);
+    margin-bottom: 5px;
+  }
+
+  /* missing bullets */
+  .add-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+  .add-skill {
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--blue);
+    margin-bottom: 6px;
+  }
+  .add-suggestion {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.6;
+    padding: 10px 12px;
+    background: var(--blue-dim);
+    border-radius: var(--radius-sm);
+    border-left: 2px solid var(--blue);
+  }
+  .add-note { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+
+  footer { margin-top: 60px; text-align: center; font-size: 12px; color: #333; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="tag">Resume Tool</div>
+    <h1>ATS Matcher</h1>
+    <p>Paste a JD and your resume. Get a line-by-line breakdown of which bullets match, which are weak, and exactly how to fix them.</p>
+  </header>
+
+  <div class="api-bar">
+    <label>API Key</label>
+    <input type="password" id="api-key" placeholder="sk-ant-..." autocomplete="off" />
+    <a href="https://console.anthropic.com" target="_blank">Get key ↗</a>
+  </div>
+
+  <div class="inputs">
+    <div class="input-block">
+      <label>Job Description</label>
+      <textarea id="jd-input" placeholder="Paste the full job description..."></textarea>
+    </div>
+    <div class="input-block">
+      <label>Your Resume</label>
+      <textarea id="resume-input" placeholder="Paste your full resume text..."></textarea>
+    </div>
+  </div>
+
+  <button class="analyze-btn" onclick="analyze()">Run ATS Analysis →</button>
+
+  <div class="error" id="error-msg"></div>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    Analyzing your resume against the JD...
+  </div>
+
+  <div class="results" id="results">
+
+    <div class="score-row">
+      <div class="score-card">
+        <div class="s-label">ATS Score</div>
+        <div class="s-val accent" id="ats-score">—</div>
+      </div>
+      <div class="score-card">
+        <div class="s-label">Keywords matched</div>
+        <div class="s-val green" id="kw-match">—</div>
+      </div>
+      <div class="score-card">
+        <div class="s-label">Keywords missing</div>
+        <div class="s-val red" id="kw-miss">—</div>
+      </div>
+      <div class="score-card">
+        <div class="s-label">Bullets to fix</div>
+        <div class="s-val amber" id="bullets-fix">—</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-hd">Keyword match</div>
+      <div id="kw-matched-pills" style="margin-bottom:10px;"></div>
+      <div id="kw-missing-pills"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-hd">Bullet-by-bullet analysis — click to expand</div>
+      <div id="bullets-list"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-hd">Bullets to add — skills the JD demands that aren't in your resume</div>
+      <div id="add-list"></div>
+    </div>
+
+  </div>
+
+  <footer>Powered by Anthropic Claude API</footer>
+</div>
+
+<script>
+function toggle(id) {
+  const body = document.getElementById('body-' + id);
+  const chev = document.getElementById('chev-' + id);
+  body.classList.toggle('open');
+  chev.classList.toggle('open');
+}
+
+async function analyze() {
+  const apiKey = document.getElementById('api-key').value.trim();
+  const jd = document.getElementById('jd-input').value.trim();
+  const resume = document.getElementById('resume-input').value.trim();
+  const errEl = document.getElementById('error-msg');
+  errEl.style.display = 'none';
+
+  if (!apiKey) { showError('Enter your Anthropic API key.'); return; }
+  if (!jd) { showError('Paste the job description.'); return; }
+  if (!resume) { showError('Paste your resume.'); return; }
+
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('loading').style.display = 'block';
+  document.querySelector('.analyze-btn').disabled = true;
+
+  const system = `You are a senior ATS expert and resume coach. Analyze a resume against a job description at the bullet level.
+
+Return ONLY a valid JSON object with NO preamble, markdown, or backticks. Structure:
+
+{
+  "ats_score": "62%",
+  "keywords": {
+    "matched": ["keyword1", "keyword2"],
+    "missing": ["keyword3", "keyword4"],
+    "partial": ["keyword5"]
+  },
+  "bullet_analysis": [
+    {
+      "original": "exact bullet text from resume",
+      "status": "weak|partial|strong",
+      "issue": "one sentence on why this is weak or partial",
+      "rewritten": "improved version of this bullet with JD keywords naturally incorporated"
+    }
+  ],
+  "bullets_to_add": [
+    {
+      "skill": "skill or requirement from JD not in resume",
+      "suggestion": "suggested bullet the candidate could add if they have relevant experience",
+      "note": "where in the resume to add this, and what experience to draw on"
+    }
+  ]
+}
+
+Rules:
+- Extract every bullet point from the resume and classify each one
+- "weak" = not relevant to JD OR missing quantification OR missing JD keywords it could include
+- "partial" = somewhat relevant but could be stronger with better JD keyword alignment
+- "strong" = well-matched, keep as-is (still include in list)
+- Rewrites must sound natural, not keyword-stuffed
+- keywords should be specific terms the ATS actually scans for (skills, tools, job titles, certifications, methodologies)
+- bullets_to_add: 3-5 most important missing skills from JD
+- Return ONLY the JSON`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-6',
+        max_tokens: 4000,
+        system,
+        messages: [{ role: 'user', content: `JOB DESCRIPTION:\n${jd}\n\nRESUME:\n${resume}` }]
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err?.error?.message || `API error ${res.status}`);
+    }
+
+    const data = await res.json();
+    const raw = data.content.map(b => b.text || '').join('');
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const r = JSON.parse(clean);
+
+    // scores
+    document.getElementById('ats-score').textContent = r.ats_score;
+    document.getElementById('kw-match').textContent = r.keywords.matched.length;
+    document.getElementById('kw-miss').textContent = r.keywords.missing.length;
+    const toFix = r.bullet_analysis.filter(b => b.status !== 'strong').length;
+    document.getElementById('bullets-fix').textContent = toFix;
+
+    // keywords
+    const matchedPills = document.getElementById('kw-matched-pills');
+    const missingPills = document.getElementById('kw-missing-pills');
+    matchedPills.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:8px;">' +
+      r.keywords.matched.map(k => `<span class="pill match">✓ ${k}</span>`).join('') +
+      (r.keywords.partial || []).map(k => `<span class="pill partial">~ ${k}</span>`).join('') +
+      '</div>';
+    missingPills.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">' +
+      r.keywords.missing.map(k => `<span class="pill miss">✗ ${k}</span>`).join('') +
+      '</div>';
+
+    // bullets
+    const bulletsList = document.getElementById('bullets-list');
+    bulletsList.innerHTML = r.bullet_analysis.map((b, i) => {
+      const dotClass = b.status === 'strong' ? 'dot-green' : b.status === 'partial' ? 'dot-amber' : 'dot-red';
+      const tagClass = b.status === 'strong' ? 'strong' : b.status === 'partial' ? 'partial' : 'weak';
+      const tagLabel = b.status === 'strong' ? 'Strong match' : b.status === 'partial' ? 'Partial match' : 'Weak / missing keywords';
+      return `
+        <div class="bullet-card">
+          <div class="bullet-card-head" onclick="toggle(${i})">
+            <span class="status-dot ${dotClass}"></span>
+            <span class="bullet-original">${b.original}</span>
+            <span class="chevron" id="chev-${i}">▼</span>
+          </div>
+          <div class="bullet-card-body" id="body-${i}">
+            <span class="issue-tag ${tagClass}">${tagLabel}</span>
+            ${b.status !== 'strong' ? `<div class="old-bullet">${b.original}</div>` : ''}
+            ${b.issue ? `<div class="why">${b.issue}</div>` : ''}
+            ${b.status !== 'strong' ? `
+              <div class="new-bullet-label">Suggested rewrite</div>
+              <div class="new-bullet">${b.rewritten}</div>
+            ` : `<div class="why" style="color:var(--green);">This bullet aligns well with the JD — keep it.</div>`}
+          </div>
+        </div>`;
+    }).join('');
+
+    // add bullets
+    const addList = document.getElementById('add-list');
+    addList.innerHTML = r.bullets_to_add.map(a => `
+      <div class="add-card">
+        <div class="add-skill">${a.skill}</div>
+        <div class="add-suggestion">${a.suggestion}</div>
+        <div class="add-note">${a.note}</div>
+      </div>`).join('');
+
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+
+  } catch (e) {
+    showError('Error: ' + (e.message || 'Something went wrong. Check your API key and try again.'));
+  } finally {
+    document.getElementById('loading').style.display = 'none';
+    document.querySelector('.analyze-btn').disabled = false;
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+</script>
+</body>
+</html>
