@@ -372,11 +372,20 @@
 
   <div class="results" id="results">
 
-    <div class="score-row">
-      <div class="score-card">
-        <div class="s-label">ATS Score</div>
-        <div class="s-val accent" id="ats-score">—</div>
+    <!-- Total score -->
+    <div style="display:flex; align-items:center; gap:24px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:24px 28px; margin-bottom:16px;">
+      <div>
+        <div style="font-family:'Syne',sans-serif; font-size:11px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-bottom:6px;">ATS Score</div>
+        <div style="font-family:'Syne',sans-serif; font-size:52px; font-weight:700; letter-spacing:-2px; color:var(--accent); line-height:1;" id="ats-score">—</div>
       </div>
+      <div style="flex:1;">
+        <div style="font-family:'Syne',sans-serif; font-size:10px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:10px;">Score breakdown</div>
+        <div id="score-bars"></div>
+      </div>
+    </div>
+
+    <!-- stat pills row -->
+    <div class="score-row">
       <div class="score-card">
         <div class="s-label">Keywords matched</div>
         <div class="s-val green" id="kw-match">—</div>
@@ -435,12 +444,18 @@ async function analyze() {
   document.getElementById('loading').style.display = 'block';
   document.querySelector('.analyze-btn').disabled = true;
 
-  const system = `You are a senior ATS expert and resume coach. Analyze a resume against a job description at the bullet level.
+  const system = `You are a senior ATS expert and resume coach. Analyze a resume against a job description using a structured weighted scoring system.
 
 Return ONLY a valid JSON object with NO preamble, markdown, or backticks. Structure:
 
 {
-  "ats_score": "62%",
+  "weighted_score": {
+    "required_skills":    { "score": 28, "max": 40, "reason": "one sentence explaining the score" },
+    "title_seniority":    { "score": 14, "max": 20, "reason": "one sentence" },
+    "experience_years":   { "score": 11, "max": 15, "reason": "one sentence" },
+    "preferred_skills":   { "score": 9,  "max": 15, "reason": "one sentence" },
+    "education":          { "score": 8,  "max": 10, "reason": "one sentence" }
+  },
   "keywords": {
     "matched": ["keyword1", "keyword2"],
     "missing": ["keyword3", "keyword4"],
@@ -463,14 +478,20 @@ Return ONLY a valid JSON object with NO preamble, markdown, or backticks. Struct
   ]
 }
 
-Rules:
-- Extract every bullet point from the resume and classify each one
-- "weak" = not relevant to JD OR missing quantification OR missing JD keywords it could include
-- "partial" = somewhat relevant but could be stronger with better JD keyword alignment
-- "strong" = well-matched, keep as-is (still include in list)
+Scoring rules:
+- required_skills (40pts): Score based on % of must-have/required skills present in resume
+- title_seniority (20pts): How well job title, level, and domain match the role
+- experience_years (15pts): Does years of experience meet stated requirements
+- preferred_skills (15pts): Preferred/nice-to-have skills present in resume
+- education (10pts): Degree level, field, and institution match
+
+Bullet rules:
+- Extract every bullet from the resume and classify each
+- "weak" = missing JD keywords it could include, or lacks quantification
+- "partial" = relevant but could be stronger with better alignment
+- "strong" = well-matched, keep as-is
 - Rewrites must sound natural, not keyword-stuffed
-- keywords should be specific terms the ATS actually scans for (skills, tools, job titles, certifications, methodologies)
-- bullets_to_add: 3-5 most important missing skills from JD
+- bullets_to_add: 3-5 most critical missing skills
 - Return ONLY the JSON`;
 
   try {
@@ -500,8 +521,34 @@ Rules:
     const clean = raw.replace(/```json|```/g, '').trim();
     const r = JSON.parse(clean);
 
-    // scores
-    document.getElementById('ats-score').textContent = r.ats_score;
+    // weighted score
+    const ws = r.weighted_score;
+    const categories = [
+      { key: 'required_skills',  label: 'Required skills',   color: 'var(--accent)' },
+      { key: 'title_seniority',  label: 'Title & seniority', color: 'var(--green)'  },
+      { key: 'experience_years', label: 'Experience years',  color: 'var(--blue)'   },
+      { key: 'preferred_skills', label: 'Preferred skills',  color: 'var(--amber)'  },
+      { key: 'education',        label: 'Education',         color: 'var(--muted)'  },
+    ];
+    const total = categories.reduce((s, c) => s + ws[c.key].score, 0);
+    const maxTotal = categories.reduce((s, c) => s + ws[c.key].max, 0);
+    document.getElementById('ats-score').textContent = Math.round(total) + '/100';
+
+    document.getElementById('score-bars').innerHTML = categories.map(c => {
+      const cat = ws[c.key];
+      const pct = Math.round((cat.score / cat.max) * 100);
+      return `
+        <div style="margin-bottom:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+            <span style="font-size:12px; color:var(--muted);">${c.label}</span>
+            <span style="font-size:12px; font-family:'Syne',sans-serif; font-weight:600; color:${c.color};">${cat.score}/${cat.max}</span>
+          </div>
+          <div style="height:5px; background:var(--border); border-radius:3px; overflow:hidden;">
+            <div style="height:100%; width:${pct}%; background:${c.color}; border-radius:3px; transition:width 0.6s ease;"></div>
+          </div>
+          <div style="font-size:11px; color:#555; margin-top:2px;">${cat.reason}</div>
+        </div>`;
+    }).join('');
     document.getElementById('kw-match').textContent = r.keywords.matched.length;
     document.getElementById('kw-miss').textContent = r.keywords.missing.length;
     const toFix = r.bullet_analysis.filter(b => b.status !== 'strong').length;
