@@ -489,8 +489,8 @@ Bullet rules:
 - Extract every bullet from the resume and classify each
 - "weak" = missing JD keywords it could include, or lacks quantification
 - "partial" = relevant but could be stronger with better alignment
-- "strong" = well-matched, keep as-is
-- Rewrites must sound natural, not keyword-stuffed
+- "strong" = well-matched, keep as-is. For strong bullets set rewritten to null and issue to null
+- Only provide rewritten text for weak and partial bullets
 - bullets_to_add: 3-5 most critical missing skills
 - Return ONLY the JSON`;
 
@@ -505,7 +505,7 @@ Bullet rules:
       },
       body: JSON.stringify({
         model: 'claude-opus-4-6',
-        max_tokens: 8000,
+        max_tokens: 16000,
         system,
         messages: [{ role: 'user', content: `JOB DESCRIPTION:\n${jd}\n\nRESUME:\n${resume}` }]
       })
@@ -519,7 +519,20 @@ Bullet rules:
     const data = await res.json();
     const raw = data.content.map(b => b.text || '').join('');
     const clean = raw.replace(/```json|```/g, '').trim();
-    const r = JSON.parse(clean);
+
+    let r;
+    try {
+      r = JSON.parse(clean);
+    } catch(parseErr) {
+      // Try to extract just the JSON object if there's trailing garbage
+      const jsonMatch = clean.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try { r = JSON.parse(jsonMatch[0]); }
+        catch(e) { throw new Error('Response was cut off — try with a shorter resume or JD.'); }
+      } else {
+        throw new Error('Response was cut off — try with a shorter resume or JD.');
+      }
+    }
 
     // weighted score
     const ws = r.weighted_score;
